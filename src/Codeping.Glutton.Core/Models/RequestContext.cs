@@ -13,7 +13,7 @@ namespace Codeping.Glutton.Core
             this.IsPack = isPack;
         }
 
-        public IUriNode Url { get; set; }
+        public UriNode Url { get; set; }
         public bool IsPack { get; set; }
         public bool IsOnlySubdirectory { get; set; }
         public Action<NotifyInfo> OnChange

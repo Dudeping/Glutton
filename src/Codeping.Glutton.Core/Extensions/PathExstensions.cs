@@ -66,12 +66,28 @@ namespace Codeping.Glutton.Core
                 extension = ".html";
             }
 
-            return $"{Path.GetDirectoryName(path).TrimStart('\\')}\\" +
-                   $"{name}{(string.IsNullOrWhiteSpace(builder.Query) ? "" : "_" + HttpUtility.UrlEncode(builder.Query))}{extension}";
+            string query = null;
+
+            if (!string.IsNullOrWhiteSpace(builder.Query))
+            {
+                query = builder.Query
+                    .Replace('\\', '_')
+                    .Replace('/', '_')
+                    .Replace(':', '_')
+                    .Replace('?', '_')
+                    .Replace('"', '_')
+                    .Replace('<', '_')
+                    .Replace('>', '_')
+                    .Replace('|', '_');
+            }
+
+            return $"{Path.GetDirectoryName(path).TrimStart('\\')}\\{name}{query}{extension}";
         }
 
         public static string BuildUrlPath(this string parentUrl, string currentUrl)
         {
+            currentUrl = currentUrl.Trim('\'');
+
             var parent = new UriBuilder(parentUrl);
             var domain = $"{parent.Scheme}://{parent.Host}{(parent.Uri.IsDefaultPort ? "" : ":" + parent.Port)}";
 

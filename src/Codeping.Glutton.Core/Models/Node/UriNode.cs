@@ -4,17 +4,22 @@ using System.Text;
 
 namespace Codeping.Glutton.Core
 {
-    public class UriNode : UriBuilder, IUriNode
+    public class UriNode : UriBuilder
     {
         public UriNode(string uri, NodeType type, string rootPath, UriNode parents) : base(uri)
         {
             this.Type = type;
             this.RootPath = rootPath;
             this.Parents = parents;
+
+            if (parents == null)
+            {
+                this.LaunchUrl = this;
+            }
         }
 
         public string RootPath { get; }
-        public IUriNode Parents { get; }
+        public UriNode Parents { get; }
         public NodeType Type { get; }
         public string Cookies { get; set; }
         public Action<NotifyInfo> Notify { get; set; }
@@ -22,27 +27,33 @@ namespace Codeping.Glutton.Core
         public string PathAndQuery => this.Uri.PathAndQuery;
         public string FullPath => this.GetFullPath();
         public bool IsLocalUrl => this.LaunchUrl.AbsoluteHost == this.AbsoluteHost;
-        public bool IsFilter => this.Filter.IsFilter(this);
-        public string AbsoluteHost => this.GetAbsoluteHost();
+        public string AbsoluteHost => this.GetAbsoluteHost(this);
         public string RelativeFilePath => this.Parents.SaveDir.GetRelativeFilePath(this.FullPath);
         public string SaveDir => System.IO.Path.GetDirectoryName(this.FullPath);
-        internal IRequestFilter Filter { get; set; }
-        public IUriNode LaunchUrl { get; private set; }
+        public UriNode LaunchUrl { get; private set; }
 
-        public IUriNode Create(string uri, NodeType type)
+        public UriNode Create(string uri, NodeType type)
         {
             return new UriNode(uri, type, this.RootPath, this)
             {
                 Cookies = this.Cookies,
-                Notify = this.Notify
+                Notify = this.Notify,
+                LaunchUrl = this.LaunchUrl,
             };
         }
 
-        private string GetAbsoluteHost()
+        public bool IsSameOrigin(string fullPath)
         {
-            var url = this.Scheme + Uri.SchemeDelimiter + this.Host;
+            var builder = new UriBuilder(fullPath);
 
-            return this.Uri.IsDefaultPort ? url : $"{url}:{this.Port}";
+            return this.LaunchUrl.AbsoluteHost == this.GetAbsoluteHost(builder);
+        }
+
+        private string GetAbsoluteHost(UriBuilder builder)
+        {
+            var url = builder.Scheme + Uri.SchemeDelimiter + builder.Host;
+
+            return builder.Uri.IsDefaultPort ? url : $"{url}:{builder.Port}";
         }
 
         private string GetFullPath()

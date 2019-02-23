@@ -2,6 +2,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace Codeping.Glutton.Host
 {
@@ -19,15 +20,26 @@ namespace Codeping.Glutton.Host
 
             var requestor = provider.GetService<IRequestor>();
 
-            var context = new RequestContext("https://www.layui.com/", "test", false)
+            //var context = new RequestContext("https://www.layui.com/", "test", false)
+            var context = new RequestContext("https://www.layui.com/admin/std/dist/views/", "test1", false)
             {
                 IsOnlySubdirectory = true,
                 OnChange = OnChange
             };
 
-            requestor.Request(context);
+            Task.Run(async () =>
+            {
+                try
+                {
+                    await requestor.RequestAsync(context);
 
-            Console.WriteLine("OK!");
+                    Console.WriteLine("OK!");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.ToString());
+                }
+            });
 
             Console.ReadKey();
         }

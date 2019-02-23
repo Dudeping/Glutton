@@ -11,7 +11,11 @@ namespace Codeping.Glutton.Core
         {
             services.AddHttpClient(HttpClientExstensions.CLIENT_NAME, HttpClientExstensions.GeneralInitialize);
 
+            services.AddTransient<IRecorder, Recorder>();
+
             services.AddTransient<IRequestor, Requestor>();
+
+            services.AddTransient<IRequestFilter, RequestFilter>();
         }
     }
 }

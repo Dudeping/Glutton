@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -14,21 +15,23 @@ namespace Codeping.Glutton.Core
     internal class Requestor : IRequestor
     {
         private readonly HttpClient _client;
-        private readonly IDownloadLogger _logger;
+        private readonly IRecorder _recorder;
         private readonly IRequestFilter _filter;
 
         public Requestor(IServiceProvider provider)
         {
+            _recorder = provider.GetService<IRecorder>();
             _filter = provider.GetService<IRequestFilter>();
-            _logger = provider.GetService<IDownloadLogger>();
-            _client = provider.GetService<IHttpClientFactory>().CreateClient(HttpClientExstensions.CLIENT_NAME);
+
+            _client = provider.GetService<IHttpClientFactory>()
+                .CreateClient(HttpClientExstensions.CLIENT_NAME);
         }
 
-        public string Request(RequestContext context)
+        public async Task<string> RequestAsync(RequestContext context)
         {
             _filter.Init(context);
 
-            this.RequestContent(context.Url);
+            await this.RequestContentAsync(context.Url);
 
             if (context.IsPack)
             {
@@ -40,18 +43,21 @@ namespace Codeping.Glutton.Core
             return context.Url.RootPath;
         }
 
-        public string RequestContent(UriNode node)
+        public async Task<string> RequestContentAsync(UriNode node)
         {
-            var isLoaded = _logger.IsDownload(node.OriginalString);
-
-            var fullPath = node.FullPath;
-
-            if (isLoaded)
+            if (_recorder.IsDownloaded(node.OriginalString))
             {
-                return fullPath;
+                return node.FullPath;
+            }
+
+            if (_filter.IsFilter(node))
+            {
+                return node.OriginalString;
             }
 
             HttpResponseMessage response = null;
+
+            node.Downloading();
 
             try
             {
@@ -62,16 +68,18 @@ namespace Codeping.Glutton.Core
                     message.Headers.Add("Cookie", node.Cookies);
                 }
 
-                message.Headers.Referrer = node.Parents?.Uri ?? new Uri("www.baidu.com");
+                message.Headers.Referrer = node.Parents?.Uri ?? new Uri("https://www.baidu.com:443/");
 
-                response = _client.SendAsync(message).Result?.EnsureSuccessStatusCode();
+                response = (await _client.SendAsync(message))?.EnsureSuccessStatusCode();
             }
             catch (Exception ex)
             {
-                node.Notify(new NotifyInfo().Error(node, ex));
+                node.Notify(new NotifyInfo(node).Error(ex));
 
                 return node.OriginalString;
             }
+
+            var fullPath = node.FullPath;
 
             var dir = Path.GetDirectoryName(fullPath);
 
@@ -82,39 +90,41 @@ namespace Codeping.Glutton.Core
 
             if (node.Type.IsBinary())
             {
-                using (var fw = new FileStream(fullPath, FileMode.OpenOrCreate, FileAccess.Write))
+                using (var fs = new FileStream(fullPath, FileMode.OpenOrCreate, FileAccess.Write))
                 {
-                    response.Content.CopyToAsync(fw).Wait();
+                    await response.Content.CopyToAsync(fs);
                 }
             }
             else
             {
-                var content = new StringBuilder(response.Content.ReadAsStringAsync().Result);
+                var content = new StringBuilder(await response.Content.ReadAsStringAsync());
 
-                this.HandleNestNode(node, Path.GetDirectoryName(fullPath), content);
+                await this.HandleNestNodeAsync(node, Path.GetDirectoryName(fullPath), content);
 
                 File.WriteAllText(fullPath, content.ToString());
             }
 
+            node.Downloaded();
+
             return fullPath;
         }
 
-        public void HandleNestNode(UriNode node, string directory, StringBuilder content)
+        public async Task HandleNestNodeAsync(UriNode node, string directory, StringBuilder content)
         {
-            this.UnityHandle(node, directory, content, NodeType.Css);
+            await this.UnityHandleAsync(node, directory, content, NodeType.Css);
 
-            this.UnityHandle(node, directory, content, NodeType.Script);
+            await this.UnityHandleAsync(node, directory, content, NodeType.Script);
 
-            this.UnityHandle(node, directory, content, NodeType.Html);
+            await this.UnityHandleAsync(node, directory, content, NodeType.Html);
 
-            this.UnityHandle(node, directory, content, NodeType.BG_Image);
+            await this.UnityHandleAsync(node, directory, content, NodeType.BG_Image);
 
-            this.UnityHandle(node, directory, content, NodeType.Image);
+            await this.UnityHandleAsync(node, directory, content, NodeType.Image);
 
-            this.UnityHandle(node, directory, content, NodeType.Font);
+            await this.UnityHandleAsync(node, directory, content, NodeType.Font);
         }
 
-        private void UnityHandle(UriNode node, string directory, StringBuilder content, NodeType type)
+        private async Task UnityHandleAsync(UriNode node, string directory, StringBuilder content, NodeType type)
         {
             var regex = new Regex(type.GetPattern(), RegexOptions.IgnoreCase);
 
@@ -122,43 +132,49 @@ namespace Codeping.Glutton.Core
 
             var information = new NotifyInfo();
 
-            node.Downloading();
-
             foreach (Match item in result)
             {
+                var rawText = item.Groups[0].Value;
+
                 var hyperlink = item.Groups[1].Value;
 
                 var lowerLink = hyperlink.ToLower();
 
-                if (_filter.IsFilter(node))
+                if (string.IsNullOrWhiteSpace(lowerLink) ||
+                    lowerLink.StartsWith("data:") ||
+                    lowerLink.StartsWith("data：") ||
+                    lowerLink.StartsWith("javascript:") ||
+                    lowerLink.StartsWith("javascript："))
                 {
                     continue;
                 }
 
                 var fullUrl = node.OriginalString.BuildUrlPath(hyperlink);
 
-                if (type == NodeType.Html && !this.IsLocalUrl(fullUrl))
+                var child = node.Create(fullUrl, type);
+
+                if (_filter.IsFilter(child))
                 {
-                    var aurl = item.Groups[0].Value.Replace(hyperlink, fullUrl);
-
-                    content.Replace(item.Groups[0].Value, aurl);
-
                     continue;
                 }
 
-                var child = node.Create(fullUrl, type);
+                child.Downloading();
 
-                var itemFullPath = this.RequestContent(child);
+                if (!(type == NodeType.Html && !child.IsLocalUrl))
+                {
+                    var itemFullPath = await this.RequestContentAsync(child);
 
-                var replacePath = fullUrl != itemFullPath
-                    ? directory.GetRelativeFilePath(itemFullPath)
-                    : fullUrl;
+                    if (itemFullPath != fullUrl)
+                    {
+                        fullUrl = directory.GetRelativeFilePath(itemFullPath);
+                    }
+                }
 
-                var text = item.Groups[0].Value.Replace(hyperlink, replacePath);
+                var text = rawText.Replace(hyperlink, fullUrl);
 
-                content.Replace(item.Groups[0].Value, text);
+                content.Replace(rawText, text);
 
-                node.Downloaded();
+                child.Downloaded();
             }
         }
     }

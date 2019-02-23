@@ -7,6 +7,6 @@ namespace Codeping.Glutton.Core
     internal interface IRequestFilter
     {
         void Init(RequestContext context);
-        bool IsFilter(IUriNode node);
+        bool IsFilter(UriNode node);
     }
 }

@@ -15,6 +15,11 @@ namespace Codeping.Glutton.Core
 
         public bool IsFilter(UriNode node)
         {
+            if (node.Type != NodeType.Html)
+            {
+                return false;
+            }
+
             var isSubdirectory = node.OriginalString.StartsWith(
                 _context.Url.OriginalString.TrimEnd('/'), StringComparison.OrdinalIgnoreCase);
 
@@ -22,9 +27,6 @@ namespace Codeping.Glutton.Core
             {
                 return true;
             }
-
-
-
 
             return false;
         }

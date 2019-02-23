@@ -6,7 +6,7 @@ namespace Codeping.Glutton.Core
 {
     public class NotifyInfo
     {
-        public NotifyInfo(IUriNode node = null)
+        public NotifyInfo(UriNode node = null)
         {
             this.Node = node;
         }
@@ -15,9 +15,9 @@ namespace Codeping.Glutton.Core
         public bool HasException => this.RawException != null;
         public Exception RawException { get; internal set; }
         public MessageState State { get; set; }
-        public IUriNode Node { get; set; }
+        public UriNode Node { get; set; }
 
-        public NotifyInfo Error(IUriNode node, string error)
+        public NotifyInfo Error(UriNode node, string error)
         {
             this.Node = node;
 
@@ -33,7 +33,7 @@ namespace Codeping.Glutton.Core
             return this.Error(this.Node, error);
         }
 
-        public NotifyInfo Error(IUriNode node, Exception exception)
+        public NotifyInfo Error(UriNode node, Exception exception)
         {
             this.Node = node;
 
@@ -51,7 +51,7 @@ namespace Codeping.Glutton.Core
             return this.Error(this.Node, exception);
         }
 
-        public NotifyInfo Skiped(IUriNode node)
+        public NotifyInfo Skiped(UriNode node)
         {
             this.Node = node;
 
@@ -65,7 +65,7 @@ namespace Codeping.Glutton.Core
             return Skiped(this.Node);
         }
 
-        public NotifyInfo Downloading(IUriNode node)
+        public NotifyInfo Downloading(UriNode node)
         {
             this.Node = node;
 
@@ -79,7 +79,7 @@ namespace Codeping.Glutton.Core
             return this.Downloading(this.Node);
         }
 
-        public NotifyInfo Downloaded(IUriNode node)
+        public NotifyInfo Downloaded(UriNode node)
         {
             this.Node = node;
 

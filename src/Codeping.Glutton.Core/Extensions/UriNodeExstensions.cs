@@ -7,17 +7,17 @@ namespace Codeping.Glutton.Core
 {
     public static class UriNodeExstensions
     {
-        public static void Downloading(this IUriNode node)
+        public static void Downloading(this UriNode node)
         {
             node.Notify(new NotifyInfo(node));
         }
 
-        public static void Downloaded(this IUriNode node)
+        public static void Downloaded(this UriNode node)
         {
             node.Notify(new NotifyInfo(node).Downloaded());
         }
 
-        public static void Skiped(this IUriNode node)
+        public static void Skiped(this UriNode node)
         {
             node.Notify(new NotifyInfo(node).Skiped());
         }
